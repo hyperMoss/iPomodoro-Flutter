@@ -33,6 +33,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.iHTCboy.iPomodoros"
     compileSdkVersion 36
+    ndkVersion = flutter.ndkVersion
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
@@ -45,8 +46,8 @@ android {
     // Configure packaging options for 16KB page size support
     packagingOptions {
         jniLibs {
-            useLegacyPackaging = false
-            // Enable 16KB page alignment for native libraries
+            // Direct-download APKs can trade library extraction for a smaller file.
+            useLegacyPackaging = project.hasProperty('compact-apk')
             pickFirsts += ['**/libc++_shared.so', '**/libfbjni.so']
         }
         resources {
@@ -56,7 +57,7 @@ android {
 
     defaultConfig {
         applicationId "com.iHTCboy.iPomodoros"
-        minSdkVersion 21
+        minSdkVersion flutter.minSdkVersion
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
@@ -161,7 +162,7 @@ tasks.register('verify16KBPageSize') {
     doLast {
         println "Verifying 16KB page size compatibility..."
         println "✓ Zip alignment is automatically enabled in AGP 8.7+"
-        println "✓ useLegacyPackaging is set to false"
+        println "Native library compression: ${project.hasProperty('compact-apk')}"
         println "✓ Bundle configuration optimized for 16KB pages"
         println "✓ NDK configuration supports 16KB page alignment"
     }
