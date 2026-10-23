@@ -1211,6 +1211,244 @@ class S {
       args: [],
     );
   }
+  String get timer_tab {
+    return Intl.message(
+      'Timer',
+      name: 'timer_tab',
+      args: [],
+    );
+  }
+
+  String get timer_countdown_mode {
+    return Intl.message(
+      'Countdown',
+      name: 'timer_countdown_mode',
+      args: [],
+    );
+  }
+
+  String get timer_count_up_mode {
+    return Intl.message(
+      'Count up',
+      name: 'timer_count_up_mode',
+      args: [],
+    );
+  }
+
+  String get timer_count_up_tips {
+    return Intl.message(
+      'Start from zero, finish when you are ready',
+      name: 'timer_count_up_tips',
+      args: [],
+    );
+  }
+
+  String get timer_finish {
+    return Intl.message(
+      'Finish',
+      name: 'timer_finish',
+      args: [],
+    );
+  }
+
+  String get timer_session_complete {
+    return Intl.message(
+      'Session complete',
+      name: 'timer_session_complete',
+      args: [],
+    );
+  }
+
+  String timer_session_duration(String duration) {
+    return Intl.message(
+      'Study time: $duration',
+      name: 'timer_session_duration',
+      args: [duration],
+    );
+  }
+
+  String get focus_statistics {
+    return Intl.message("Statistics", name: 'focus_statistics', args: []);
+  }
+
+  String get focus_timeline {
+    return Intl.message("Timeline", name: 'focus_timeline', args: []);
+  }
+
+  String get focus_overview {
+    return Intl.message("Overview", name: 'focus_overview', args: []);
+  }
+
+  String get focus_day {
+    return Intl.message("Day", name: 'focus_day', args: []);
+  }
+
+  String get focus_week {
+    return Intl.message("Week", name: 'focus_week', args: []);
+  }
+
+  String get focus_month {
+    return Intl.message("Month", name: 'focus_month', args: []);
+  }
+
+  String get focus_year {
+    return Intl.message("Year", name: 'focus_year', args: []);
+  }
+
+  String get focus_all {
+    return Intl.message("All", name: 'focus_all', args: []);
+  }
+
+  String get focus_today {
+    return Intl.message("Today", name: 'focus_today', args: []);
+  }
+
+  String get focus_total_time {
+    return Intl.message("Focus time", name: 'focus_total_time', args: []);
+  }
+
+  String get focus_days {
+    return Intl.message("Active days", name: 'focus_days', args: []);
+  }
+
+  String get focus_completed {
+    return Intl.message("Completed", name: 'focus_completed', args: []);
+  }
+
+  String get focus_abandoned {
+    return Intl.message("Stopped early", name: 'focus_abandoned', args: []);
+  }
+
+  String get focus_sessions {
+    return Intl.message("Sessions", name: 'focus_sessions', args: []);
+  }
+
+  String get focus_average {
+    return Intl.message("Daily average", name: 'focus_average', args: []);
+  }
+
+  String get focus_trend {
+    return Intl.message("Trend", name: 'focus_trend', args: []);
+  }
+
+  String get focus_distribution {
+    return Intl.message("By mode", name: 'focus_distribution', args: []);
+  }
+
+  String get focus_heatmap {
+    return Intl.message("Year in focus", name: 'focus_heatmap', args: []);
+  }
+
+  String get focus_less {
+    return Intl.message("Less", name: 'focus_less', args: []);
+  }
+
+  String get focus_more {
+    return Intl.message("More", name: 'focus_more', args: []);
+  }
+
+  String get focus_empty {
+    return Intl.message("No focus sessions on this day", name: 'focus_empty', args: []);
+  }
+
+  String get focus_empty_hint {
+    return Intl.message("Finish a timer or add a past session.", name: 'focus_empty_hint', args: []);
+  }
+
+  String get focus_no_statistics {
+    return Intl.message("Your progress will appear here after your first session.", name: 'focus_no_statistics', args: []);
+  }
+
+  String get focus_add {
+    return Intl.message("Add session", name: 'focus_add', args: []);
+  }
+
+  String get focus_edit {
+    return Intl.message("Review session", name: 'focus_edit', args: []);
+  }
+
+  String get focus_title {
+    return Intl.message("What did you focus on?", name: 'focus_title', args: []);
+  }
+
+  String get focus_notes {
+    return Intl.message("Notes and reflections", name: 'focus_notes', args: []);
+  }
+
+  String get focus_start {
+    return Intl.message("Start time", name: 'focus_start', args: []);
+  }
+
+  String get focus_end {
+    return Intl.message("End time", name: 'focus_end', args: []);
+  }
+
+  String get focus_pause {
+    return Intl.message("Paused", name: 'focus_pause', args: []);
+  }
+
+  String get focus_manual {
+    return Intl.message("Manual entry", name: 'focus_manual', args: []);
+  }
+
+  String get focus_saved {
+    return Intl.message("Saved to your calendar", name: 'focus_saved', args: []);
+  }
+
+  String get focus_save_error {
+    return Intl.message("Could not save. Your session is kept here; please retry.", name: 'focus_save_error', args: []);
+  }
+
+  String get focus_load_error {
+    return Intl.message("Could not load history. Your saved data has been preserved.", name: 'focus_load_error', args: []);
+  }
+
+  String get focus_retry {
+    return Intl.message("Retry", name: 'focus_retry', args: []);
+  }
+
+  String get focus_delete {
+    return Intl.message("Delete session", name: 'focus_delete', args: []);
+  }
+
+  String get focus_delete_confirm {
+    return Intl.message("Delete this focus session? This cannot be undone.", name: 'focus_delete_confirm', args: []);
+  }
+
+  String get focus_invalid_time {
+    return Intl.message("End must follow start, and cannot be in the future.", name: 'focus_invalid_time', args: []);
+  }
+
+  String get focus_date {
+    return Intl.message("Date", name: 'focus_date', args: []);
+  }
+
+  String get focus_previous {
+    return Intl.message("Previous period", name: 'focus_previous', args: []);
+  }
+
+  String get focus_next {
+    return Intl.message("Next period", name: 'focus_next', args: []);
+  }
+
+  String get focus_statistics_note {
+    return Intl.message("Time includes completed and stopped sessions. Pauses and breaks are excluded. Sessions are counted on their start date. Daily average uses active days.", name: 'focus_statistics_note', args: []);
+  }
+
+  String get focus_device_only {
+    return Intl.message("Saved on this device", name: 'focus_device_only', args: []);
+  }
+
+  String get focus_detail {
+    return Intl.message("Session details", name: 'focus_detail', args: []);
+  }
+
+  String get focus_save_retry {
+    return Intl.message("Retry saving", name: 'focus_save_retry', args: []);
+  }
+
+  String get focus_status_completed => Intl.message("Completed", name: "focus_status_completed", args: []);
+
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<S> {

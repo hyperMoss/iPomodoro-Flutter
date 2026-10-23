@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:iPomodoro/ui/page/statistics_page.dart';
 import 'package:flutter/services.dart';
 import 'package:iPomodoro/common/channel/native_method_channel.dart';
 import 'package:iPomodoro/common/constant/app_colors.dart';
@@ -81,6 +82,7 @@ class _MyRootPageState extends State<MyRootPage> {
     AppColors.PRIMARY_MAIN_COLOR,
     AppColors.TIMER_MAIN_COLOR,
     AppColors.COUNTDOWN_MAIN_COLOR,
+    AppColors.PRIMARY_MAIN_COLOR,
     AppColors.ME_MAIN_COLOR
   ];
 
@@ -133,6 +135,7 @@ class _MyRootPageState extends State<MyRootPage> {
                   PomodoroPage(),
                   TimerPage(),
                   CountdownPagee(),
+                  StatisticsPage(),
                   MePage(),
                 ],
               ),
@@ -152,12 +155,17 @@ class _MyRootPageState extends State<MyRootPage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.access_time),
             activeIcon: Icon(Icons.timelapse),
-            label: S.of(context).countdown,
+            label: S.of(context).timer_tab,
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.date_range_outlined),
             activeIcon: Icon(Icons.date_range),
             label: S.of(context).tasks,
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_month_outlined),
+            activeIcon: Icon(Icons.calendar_month),
+            label: S.of(context).focus_statistics,
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.account_circle_outlined),

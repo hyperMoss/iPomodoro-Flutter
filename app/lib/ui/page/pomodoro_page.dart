@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:iPomodoro/model/study_timer.dart';
+import 'package:iPomodoro/model/focus_session.dart';
+import 'package:iPomodoro/common/utils/focus_history.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iPomodoro/common/constant/app_colors.dart';
@@ -16,12 +19,24 @@ import 'package:iPomodoro/ui/widget/tips_dialog.dart';
 import 'package:iPomodoro/common/channel/native_method_channel.dart';
 
 class PomodoroPage extends StatefulWidget {
+  const PomodoroPage(
+      {super.key, this.now, this.history, this.showIntro = true});
+  final DateTime Function()? now;
+  final FocusHistory? history;
+  final bool showIntro;
+
   @override
   _PomodoroPageState createState() => _PomodoroPageState();
 }
 
-class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver {
-  late Timer _timer;
+class _PomodoroPageState extends State<PomodoroPage>
+    with WidgetsBindingObserver {
+  Timer? _timer;
+  late final StudyTimer _studyTimer = StudyTimer(now: widget.now);
+  FocusHistory get _history => widget.history ?? FocusHistory.instance;
+  int _targetSeconds = 0;
+  bool _isSaving = false;
+  bool _completionPending = false;
   int _hours = 0;
   String _minutes = '25';
   String _seconds = '00';
@@ -39,7 +54,7 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
   String _break_short = '05';
   String _break_long = '15';
   int _break_long_delay = 2;
-  int _enable_notification = 0;//0是允许推送
+  int _enable_notification = 0; //0是允许推送
 
   bool _is_audio_sound = true;
   bool _is_ticking_sound = true;
@@ -58,18 +73,18 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
     _set_color();
   }
 
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if(_show_tpis) {
+    if (_show_tpis && widget.showIntro) {
       _show_tpis = false;
       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
         showTips();
         // 华为渠道必须有隐私弹窗
         show_privacy_policy();
       });
-    };
+    }
+    ;
   }
 
   @override
@@ -87,6 +102,10 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
     switch (state) {
       case AppLifecycleState.resumed:
         // app当前可见，并且能响应用户的输入
+        if (_timer_mode == TimerStateMode.timing) {
+          setState(_updateTime);
+          if (_countdown == 0) countdownFinish();
+        }
         NativeChannel.changeBadgeNumber(0);
         NotificationUtils.cancelNotification(10);
         NotificationUtils.cancelNotification(11);
@@ -98,10 +117,14 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
       case AppLifecycleState.paused:
         //app当前在后台，不可响应用户的输入
         if (_enable_notification == 0 && _timer_mode == TimerStateMode.timing) {
-          NotificationUtils.showNotification(0, S.of(context).pomodoro_push_tips, TipsDialog.get_tips());
-          NotificationUtils.addScheduleNotification(10, S.of(context).pomodoro_push_tips, TipsDialog.get_tips(), 10);
-          NotificationUtils.addScheduleNotification(11, S.of(context).pomodoro_push_tips, TipsDialog.get_tips(), 30);
-          NotificationUtils.addScheduleNotification(12, S.of(context).pomodoro_push_tips, TipsDialog.get_tips(), 300);
+          NotificationUtils.showNotification(
+              0, S.of(context).pomodoro_push_tips, TipsDialog.get_tips());
+          NotificationUtils.addScheduleNotification(
+              10, S.of(context).pomodoro_push_tips, TipsDialog.get_tips(), 10);
+          NotificationUtils.addScheduleNotification(
+              11, S.of(context).pomodoro_push_tips, TipsDialog.get_tips(), 30);
+          NotificationUtils.addScheduleNotification(
+              12, S.of(context).pomodoro_push_tips, TipsDialog.get_tips(), 300);
         }
         break;
       default:
@@ -111,7 +134,9 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
 
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel();
+    tickingPlayer.audioPlayer.dispose();
+    audioPlayer.audioPlayer.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -127,7 +152,10 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
           _timer_mode == TimerStateMode.start
               ? TextButton.icon(
                   onPressed: () {
-                    Navigator.of(context).pushNamed('/pomodoro_settings').then((value) {
+                    Navigator.of(context)
+                        .pushNamed('/pomodoro_settings')
+                        .then((value) {
+                      if (!mounted) return;
                       _pomodoro_set_time();
                       _pomodoro_set_sounds();
                       _set_color();
@@ -136,16 +164,19 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
                   icon: Icon(Icons.settings),
                   label: Text(""),
                   style: ButtonStyle(
-                    foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+                    foregroundColor:
+                        WidgetStateProperty.all<Color>(Colors.white),
                   ),
                 )
               : TextButton(
-                  onPressed: _pressed_stop_button,
+                  onPressed: _isSaving ? null : _pressed_stop_button,
                   child: Text(S.of(context).give_up_button),
                   style: ButtonStyle(
-                    foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+                    foregroundColor:
+                        WidgetStateProperty.all<Color>(Colors.white),
                   ))
-        ], systemOverlayStyle: SystemUiOverlayStyle.light,
+        ],
+        systemOverlayStyle: SystemUiOverlayStyle.light,
       ),
       body: Container(
         alignment: Alignment.center,
@@ -157,8 +188,12 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
                 child: Column(
                   children: [
                     SizedBox(height: DeviceUtils.get_size(context, 18, 20, 25)),
-                    Text(_timer_mode == TimerStateMode.timing ?
-                    (_pomodoro_mode == PomodoroMode.breaktime ? S.of(context).break_time : S.of(context).learn_time ) : S.of(context).pomodoro_time,
+                    Text(
+                        _timer_mode == TimerStateMode.timing
+                            ? (_pomodoro_mode == PomodoroMode.breaktime
+                                ? S.of(context).break_time
+                                : S.of(context).learn_time)
+                            : S.of(context).pomodoro_time,
                         style: TextStyle(
                           fontSize: DeviceUtils.get_size(context, 20, 22, 35),
                           color: Colors.white,
@@ -176,7 +211,8 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
                       SizedBox(width: 45),
                       Text(_hours.toString(),
                           style: TextStyle(
-                            fontSize: DeviceUtils.get_size(context, 100, 120, 200),
+                            fontSize:
+                                DeviceUtils.get_size(context, 100, 120, 200),
                             fontFamily: 'ChakraPetch',
                             color: Colors.white,
                           )),
@@ -184,17 +220,21 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(height: DeviceUtils.get_size(context, 23, 25, 45)),
+                          SizedBox(
+                              height:
+                                  DeviceUtils.get_size(context, 23, 25, 45)),
                           Text(S.of(context).hours,
                               style: TextStyle(
-                                fontSize: DeviceUtils.get_size(context, 18, 20, 40),
+                                fontSize:
+                                    DeviceUtils.get_size(context, 18, 20, 40),
                                 color: Colors.white,
                               ))
                         ],
                       ),
                       Text(_minutes,
                           style: TextStyle(
-                            fontSize: DeviceUtils.get_size(context, 100, 120, 200),
+                            fontSize:
+                                DeviceUtils.get_size(context, 100, 120, 200),
                             fontFamily: 'ChakraPetch',
                             color: Colors.white,
                           )),
@@ -203,22 +243,31 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SizedBox(height: DeviceUtils.get_size(context, 23, 25, 45)),
+                          SizedBox(
+                              height:
+                                  DeviceUtils.get_size(context, 23, 25, 45)),
                           Text(S.of(context).minutes,
                               style: TextStyle(
-                                fontSize: DeviceUtils.get_size(context, 18, 20, 40),
+                                fontSize:
+                                    DeviceUtils.get_size(context, 18, 20, 40),
                                 color: Colors.white,
                               )),
-                          SizedBox(height: _show_edit_button ? DeviceUtils.get_size(context, 20, 38, 50) : DeviceUtils.get_size(context, 20, 28, 28)),
+                          SizedBox(
+                              height: _show_edit_button
+                                  ? DeviceUtils.get_size(context, 20, 38, 50)
+                                  : DeviceUtils.get_size(context, 20, 28, 28)),
                           Visibility(
                             visible: _show_edit_button,
                             child: TextButton.icon(
                               onPressed: _pressed_edit_button,
-                              icon: Icon(Icons.edit, size: DeviceUtils.get_size(context, 22, 25, 40)),
+                              icon: Icon(Icons.edit,
+                                  size: DeviceUtils.get_size(
+                                      context, 22, 25, 40)),
                               label: Text(''),
                               style: ButtonStyle(
                                 alignment: Alignment.centerLeft,
-                                foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+                                foregroundColor: WidgetStateProperty.all<Color>(
+                                    Colors.white),
                               ),
                             ),
                           ),
@@ -229,7 +278,8 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
                               child: Text(_seconds,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    fontSize: DeviceUtils.get_size(context, 35, 50, 65),
+                                    fontSize: DeviceUtils.get_size(
+                                        context, 35, 50, 65),
                                     fontFamily: 'ChakraPetch',
                                     color: Colors.grey[300],
                                   )),
@@ -242,7 +292,10 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
                   SizedBox(height: DeviceUtils.get_size(context, 5, 10, 60)),
                   TextButton(
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.white, minimumSize: Size(DeviceUtils.get_size(context, 135, 155, 200), DeviceUtils.get_size(context, 40, 44, 65)),
+                      foregroundColor: Colors.white,
+                      minimumSize: Size(
+                          DeviceUtils.get_size(context, 135, 155, 200),
+                          DeviceUtils.get_size(context, 40, 44, 65)),
                       padding: EdgeInsets.symmetric(horizontal: 16),
                       side: BorderSide(width: 1.5, color: Colors.white),
                       shape: const RoundedRectangleBorder(
@@ -250,19 +303,21 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
                       ),
                     ),
                     child: Text(
-                      _timer_mode == TimerStateMode.start
-                          ? S.of(context).start_button
-                          : (_timer_mode == TimerStateMode.timing
-                              ? S.of(context).pause_button
-                              : (_timer_mode == TimerStateMode.pause
-                                  ? S.of(context).continue_button
-                                  : S.of(context).start_button)),
+                      _completionPending
+                          ? S.of(context).focus_save_retry
+                          : _timer_mode == TimerStateMode.start
+                              ? S.of(context).start_button
+                              : (_timer_mode == TimerStateMode.timing
+                                  ? S.of(context).pause_button
+                                  : (_timer_mode == TimerStateMode.pause
+                                      ? S.of(context).continue_button
+                                      : S.of(context).start_button)),
                       style: TextStyle(
                         fontSize: 18,
                         color: Colors.white,
                       ),
                     ),
-                    onPressed: _pressed_start_button,
+                    onPressed: _isSaving ? null : _pressed_start_button,
                   ),
                   SizedBox(height: DeviceUtils.get_size(context, 0, 8, 10)),
                 ],
@@ -276,10 +331,18 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
 
   void _pomodoro_set_time() {
     AppStorage.getInt(AppStorage.K_STRING_POMODORO_BREAK_SHORT).then((value) {
-      _break_short = value == null ? '05' : value > 9 ? value.toString() : '0$value';
+      _break_short = value == null
+          ? '05'
+          : value > 9
+              ? value.toString()
+              : '0$value';
     });
     AppStorage.getInt(AppStorage.K_STRING_POMODORO_BREAK_LONG).then((value) {
-      _break_long = value == null ? '15' : value > 9 ? value.toString() : '0$value';
+      _break_long = value == null
+          ? '15'
+          : value > 9
+              ? value.toString()
+              : '0$value';
     });
     AppStorage.getInt(AppStorage.K_STRING_POMODORO_BREAK_LONG_DELAY)
         .then((value) {
@@ -293,15 +356,22 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
       _pomodoro_hours = _hours;
     });
     AppStorage.getInt(AppStorage.K_STRING_POMODORO_MINUTES).then((value) {
+      if (!mounted) return;
       setState(() {
-         _minutes = value == null ? '25' : value > 9 ? value.toString() : '0$value';
+        _minutes = value == null
+            ? '25'
+            : value > 9
+                ? value.toString()
+                : '0$value';
         _pomodoro_minutes = _minutes;
       });
     });
   }
 
   void _pomodoro_set_sounds() {
-    AppStorage.getString(AppStorage.K_STRING_POMODORO_TICKING_SOUND).then((value) {
+    AppStorage.getString(AppStorage.K_STRING_POMODORO_TICKING_SOUND)
+        .then((value) {
+      if (!mounted) return;
       var sound = value ?? "Ticking";
       if (sound != 'None') {
         _is_ticking_sound = true;
@@ -311,7 +381,9 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
       }
     });
 
-    AppStorage.getString(AppStorage.K_STRING_POMODORO_ALARM_SOUND).then((value) {
+    AppStorage.getString(AppStorage.K_STRING_POMODORO_ALARM_SOUND)
+        .then((value) {
+      if (!mounted) return;
       var sound = value ?? "Cowbell";
       if (sound != 'None') {
         _is_audio_sound = true;
@@ -325,16 +397,18 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
   void _set_color() {
     AppStorage.getInt(AppStorage.K_STRING_POMODORO_TITLE_BAR_COLOR)
         .then((value) {
+      if (!mounted) return;
       setState(() {
         titleBarColor =
-        value != null ? Color(value) : AppColors.PRIMARY_MAIN_COLOR;
+            value != null ? Color(value) : AppColors.PRIMARY_MAIN_COLOR;
       });
     });
     AppStorage.getInt(AppStorage.K_STRING_POMODORO_BACKGROUND_COLOR)
         .then((value) {
+      if (!mounted) return;
       setState(() {
         backgroundColor =
-        value != null ? Color(value) : AppColors.PRIMARY_SUB_COLOR;
+            value != null ? Color(value) : AppColors.PRIMARY_SUB_COLOR;
       });
     });
   }
@@ -344,10 +418,11 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
       change_time(duration);
     }).then((durationTime) {
       change_time(durationTime);
-        });
+    });
   }
 
   void change_time(Duration duration) {
+    if (!mounted || _timer_mode != TimerStateMode.start) return;
     setState(() {
       _hours = duration.inHours;
       int minutes = duration.inMinutes;
@@ -361,17 +436,26 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
   }
 
   void _pressed_start_button() {
+    if (_isSaving) return;
+    if (_completionPending) {
+      countdownFinish();
+      return;
+    }
     setState(() {
       switch (_timer_mode) {
         case TimerStateMode.start:
+          _studyTimer.reset();
+          _targetSeconds =
+              _hours * 3600 + int.parse(_minutes) * 60 + int.parse(_seconds);
           _timer_mode = TimerStateMode.timing;
           _show_seconds_text = true;
           _show_edit_button = false;
           startTimer();
           break;
         case TimerStateMode.timing:
+          _studyTimer.pause();
           _timer_mode = TimerStateMode.pause;
-          _timer.cancel();
+          _timer?.cancel();
           tickingStop();
           break;
         case TimerStateMode.pause:
@@ -380,7 +464,7 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
           break;
         case TimerStateMode.stop:
           _timer_mode = TimerStateMode.start;
-          _timer.cancel();
+          _timer?.cancel();
           _show_seconds_text = false;
           _show_edit_button = true;
           _hours = _pomodoro_hours;
@@ -393,12 +477,38 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
   }
 
   void _pressed_stop_button() async {
+    if (_isSaving) return;
+    if (_completionPending) {
+      countdownFinish();
+      return;
+    }
+    final wasRunning = _timer_mode == TimerStateMode.timing;
+    _timer?.cancel();
+    _studyTimer.pause();
+    tickingStop();
+    setState(() {
+      _isSaving = true;
+      _timer_mode = TimerStateMode.pause;
+      _updateTime();
+    });
     bool ans = await AlertView.show(
         context, S.of(context).tips_text, S.of(context).pomodoro_give_up_tips,
         cancelText: S.of(context).pomodoro_no,
         confirmText: S.of(context).pomodoro_yes);
-    if (ans) {
+    if (!mounted) return;
+    if (!ans) {
       setState(() {
+        _isSaving = false;
+        _timer_mode = wasRunning ? TimerStateMode.timing : TimerStateMode.pause;
+      });
+      if (wasRunning) startTimer();
+      return;
+    }
+    if (ans) {
+      if (!await _saveSession(FocusOutcome.abandoned)) return;
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
         _pomodoro_times = 0;
         _timer_mode = TimerStateMode.stop;
         _pomodoro_mode = PomodoroMode.stop;
@@ -416,32 +526,55 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
     //     });
     Navigator.of(context).push(PageRouteBuilder(
         opaque: false,
-        pageBuilder: (BuildContext context, _, __) => TipsDialog(backgroundColor: titleBarColor,)));
+        pageBuilder: (BuildContext context, _, __) => TipsDialog(
+              backgroundColor: titleBarColor,
+            )));
+  }
+
+  Future<bool> _saveSession(FocusOutcome outcome) async {
+    _timer?.cancel();
+    _studyTimer.pause();
+    tickingStop();
+    setState(() {
+      _timer_mode = TimerStateMode.pause;
+      _isSaving = true;
+    });
+    // Odd cycles are breaks and never produce a focus record.
+    if (_pomodoro_times.isOdd) return true;
+    final session = _studyTimer.finish(FocusSource.pomodoro, outcome,
+        limit: outcome == FocusOutcome.completed
+            ? Duration(seconds: _targetSeconds)
+            : null);
+    try {
+      if (session != null) await _history.save(session);
+      return mounted;
+    } catch (_) {
+      if (!mounted) return false;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(S.of(context).focus_save_error)),
+      );
+      return false;
+    }
+  }
+
+  void _updateTime() {
+    _countdown = (_targetSeconds - _studyTimer.elapsed.inSeconds)
+        .clamp(0, _targetSeconds);
+    final time = TimeUtils.calculateDate(_countdown);
+    _hours = time[0];
+    _minutes = time[1];
+    _seconds = time[2];
   }
 
   void startTimer() {
-    _countdown =
-        _hours * 60 * 60 + int.parse(_minutes) * 60 + int.parse(_seconds);
-    const oneSec = const Duration(seconds: 1);
-    _timer = new Timer.periodic(
-      oneSec,
-      (Timer timer) {
-        if (_countdown == 0) {
-          tickingStop();
-          timer.cancel();
-          countdownFinish();
-        } else {
-          setState(() {
-            tickingPlay();
-            _countdown--;
-            List time = TimeUtils.calculateDate(_countdown);
-            _hours = time[0];
-            _minutes = time[1];
-            _seconds = time[2];
-          });
-        }
-      },
-    );
+    _timer?.cancel();
+    _studyTimer.start();
+    tickingPlay();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(_updateTime);
+      if (_countdown == 0) countdownFinish();
+    });
   }
 
   void tickingStop() {
@@ -458,7 +591,11 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
     }
   }
 
-  void countdownFinish() {
+  void countdownFinish() async {
+    if (_isSaving) return;
+    _completionPending = true;
+    if (!await _saveSession(FocusOutcome.completed)) return;
+    if (!mounted) return;
     setState(() {
       _pomodoro_times++;
     });
@@ -467,13 +604,23 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
     }
     bool is_pomodoro = (_pomodoro_times % 2) == 0; // 等于0就是番茄时间
     int x_pomodoro = ((_pomodoro_times + 1) / 2).floor();
-    String title = is_pomodoro ? S.of(context).tips_come_on : S.of(context).tips_congratulation;
-    String content = is_pomodoro ? S.of(context).pomodoro_next_times('${x_pomodoro +1}') : S.of(context).pomodoro_next_break('${x_pomodoro}') ;
+    String title = is_pomodoro
+        ? S.of(context).tips_come_on
+        : S.of(context).tips_congratulation;
+    String content = is_pomodoro
+        ? S.of(context).pomodoro_next_times('${x_pomodoro + 1}')
+        : S.of(context).pomodoro_next_break('${x_pomodoro}');
 
-    AlertView.show(context, title, content, cancelText: '', confirmText: S.of(context).pomodoro_ok).then((bool ans) {
+    AlertView.show(context, title, content,
+            cancelText: '', confirmText: S.of(context).pomodoro_ok)
+        .then((bool ans) {
+      if (!mounted) return;
       setState(() {
+        _isSaving = false;
+        _completionPending = false;
         _timer_mode = TimerStateMode.start;
-        _pomodoro_mode = is_pomodoro ? PomodoroMode.timing : PomodoroMode.breaktime;
+        _pomodoro_mode =
+            is_pomodoro ? PomodoroMode.timing : PomodoroMode.breaktime;
         if (is_pomodoro) {
           _hours = _pomodoro_hours;
           _minutes = _pomodoro_minutes;
@@ -481,7 +628,7 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
         } else {
           _hours = 0;
           _seconds = '00';
-          if(x_pomodoro > _break_long_delay) {
+          if (x_pomodoro > _break_long_delay) {
             _minutes = _break_long;
           } else {
             _minutes = _break_short;
@@ -489,20 +636,15 @@ class _PomodoroPageState extends State<PomodoroPage> with WidgetsBindingObserver
         }
       });
 
-      if(ans) {
+      if (ans) {
         _pressed_start_button();
       }
     });
   }
-  
+
   void show_privacy_policy() {
-    if(Platform.isAndroid) {
-      AppStorage.getInt(AppStorage.K_STRING_PRIVACY_SHOW_TIPS).then((value) {
-        
-      });
+    if (Platform.isAndroid) {
+      AppStorage.getInt(AppStorage.K_STRING_PRIVACY_SHOW_TIPS).then((value) {});
     }
   }
-
 }
-
-
