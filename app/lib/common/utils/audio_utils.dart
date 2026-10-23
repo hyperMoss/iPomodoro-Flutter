@@ -2,8 +2,9 @@ import 'package:audioplayers/audioplayers.dart';
 
 // https://pub.dev/packages/audioplayers/example
 class AudioPlayerUtil {
-  static AudioPlayer player = AudioPlayer();
-  AudioPlayer audioPlayer = AudioPlayer();
+  static final _assetCache = AudioCache(prefix: 'assets/optimized/');
+  static AudioPlayer player = AudioPlayer()..audioCache = _assetCache;
+  AudioPlayer audioPlayer = AudioPlayer()..audioCache = _assetCache;
   final AudioContext audioContext = AudioContext(
     iOS: AudioContextIOS(
       category: AVAudioSessionCategory.playback,
